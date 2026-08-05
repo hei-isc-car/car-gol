@@ -1,8 +1,0 @@
-{
-    "recommendations": [
-        "probe-rs.probe-rs-debugger",
-        "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml",
-        "fill-labs.dependi"
-    ]
-}
