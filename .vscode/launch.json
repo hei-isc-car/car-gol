@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug GoLRS (ESP32-C3)",
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/GoLRS",
+            "preLaunchTask": "golrs-debug-build",
+            "chip": "esp32c3",
+            "wireProtocol": "Jtag",
+            "consoleLogLevel": "Console",
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "haltAfterReset": true,
+                "formatOptions": {
+                    "binaryFormat": "elf"
+                }
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "${workspaceFolder}/GoLRS/target/riscv32imc-unknown-none-elf/release/car-gol"
+                }
+            ]
+        }
+    ]
+}
