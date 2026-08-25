@@ -205,7 +205,9 @@ impl LcdDisplay {
     assert_eq!(LOGO_RGB565.len(), expected_size, "Invalid logo RGB565 size");
 
     let mut pixels = LOGO_RGB565
-      .chunks_exact(2)
+      .as_chunks::<2>()
+      .0
+      .iter()
       .map(|b| u16::from_be_bytes([b[0], b[1]]));
 
     self
