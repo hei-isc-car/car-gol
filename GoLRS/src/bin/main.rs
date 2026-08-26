@@ -31,6 +31,8 @@ use log::{debug, info, warn};
 use uart::{GridFrameListener, rust_send_grid, take_step_once_request};
 
 #[cfg(feature = "board-lcdkit")]
+use embedded_graphics::pixelcolor::Rgb565;
+#[cfg(feature = "board-lcdkit")]
 use esp_hal::{
   gpio::{Level, Output, OutputConfig},
   rmt::Rmt,
@@ -45,6 +47,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 const STEP_PERIOD_MIN_MS: u32 = 100;
 const STEP_PERIOD_MAX_MS: u32 = 2500;
 const STEP_PERIOD_STEP_MS: u32 = 100;
+const DRAW_GRID_BOARDLCDKIT: bool = false;
 
 // ---------------------------------------------------------------------------
 // ASM functions
@@ -155,7 +158,14 @@ fn main() -> ! {
   board_io.set_activity_led(true);
   #[cfg(feature = "board-lcdkit")]
   {
-    board_io.lcd().show_splash();
+    use embedded_graphics::pixelcolor::RgbColor;
+
+    board_io.lcd().show_splash_with(
+      "Connect UART to\n host @ 115'200\n      baud",
+      40,
+      170,
+      Rgb565::WHITE,
+    );
     board_io.lcd().backlight_on();
   }
 
@@ -187,6 +197,14 @@ fn main() -> ! {
   let mut step_period_ms: u32 = 1000;
   let mut last_step = Instant::now();
 
+  // Flag to know which LCD screen to show
+  #[cfg(feature = "board-lcdkit")]
+  let mut lcd_showing_splash = false;
+  #[cfg(feature = "board-lcdkit")]
+  let mut lcd_showing_splash_old = false;
+  #[cfg(feature = "board-lcdkit")]
+  let mut first_click = false;
+
   loop {
     let now = Instant::now();
     let step_period = Duration::from_millis(step_period_ms as u64);
@@ -207,6 +225,30 @@ fn main() -> ! {
       info!("Step period increased to {} ms", step_period_ms);
     }
 
+    #[cfg(feature = "board-lcdkit")]
+    {
+      if board_io.push_button_clicked() {
+        if !first_click {
+          first_click = true;
+        } else {
+          lcd_showing_splash = !lcd_showing_splash;
+        }
+      }
+      if lcd_showing_splash != lcd_showing_splash_old {
+        if lcd_showing_splash {
+          board_io.lcd().show_logo_fullwidth();
+        } else {
+          let (curr, _) = current_and_next_ptrs();
+          unsafe {
+            board_io
+              .lcd()
+              .show_game_of_life::<32, 32>(curr, DRAW_GRID_BOARDLCDKIT);
+          };
+        }
+        lcd_showing_splash_old = lcd_showing_splash;
+      }
+    }
+
     // Drain any host bytes and stage a full grid if one arrives.
     frame_listener.poll(&mut usb_rx);
 
@@ -217,19 +259,34 @@ fn main() -> ! {
     if try_apply_pending_grid(cur) {
       // Push the applied grid immediately so the viewer updates right away.
       rust_send_grid(cur as *const u32, CELLS as u32);
+      #[cfg(feature = "board-lcdkit")]
+      if !lcd_showing_splash {
+        unsafe {
+          board_io
+            .lcd()
+            .show_game_of_life::<32, 32>(nxt, DRAW_GRID_BOARDLCDKIT);
+        };
+      }
       info!("Applied host grid and sent immediate display update");
       // Restart timing after host override to avoid an immediate local step.
       last_step = Instant::now();
     }
 
-    if (take_step_once_request() || board_io.take_step_once())
-      && !frame_listener.frame_in_progress()
-    {
+    #[cfg(feature = "board-lcdkit")]
+    let clicked = false;
+    #[cfg(feature = "board-devkit-rust-2")]
+    let clicked = board_io.push_button_clicked();
+
+    if (take_step_once_request() || clicked) && !frame_listener.frame_in_progress() {
       unsafe { gol_step(cur, nxt, COLS as u32, ROWS as u32) };
       #[cfg(feature = "board-lcdkit")]
-      unsafe {
-        board_io.lcd().show_game_of_life::<32, 32>(nxt);
-      };
+      if !lcd_showing_splash {
+        unsafe {
+          board_io
+            .lcd()
+            .show_game_of_life::<32, 32>(nxt, DRAW_GRID_BOARDLCDKIT);
+        };
+      }
       board_io.pulse_activity_led();
       last_step = Instant::now();
       continue;
@@ -239,9 +296,13 @@ fn main() -> ! {
       // Compute next gen, send over UART, swap.
       unsafe { gol_step(cur, nxt, COLS as u32, ROWS as u32) };
       #[cfg(feature = "board-lcdkit")]
-      unsafe {
-        board_io.lcd().show_game_of_life::<32, 32>(nxt);
-      };
+      if !lcd_showing_splash {
+        unsafe {
+          board_io
+            .lcd()
+            .show_game_of_life::<32, 32>(nxt, DRAW_GRID_BOARDLCDKIT);
+        };
+      }
       board_io.pulse_activity_led();
       last_step = Instant::now();
     }

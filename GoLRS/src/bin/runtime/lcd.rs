@@ -82,6 +82,7 @@ impl DrawTarget for TileBuffer {
 const LOGO_WIDTH: u16 = 100;
 const LOGO_HEIGHT: u16 = 100;
 static LOGO_RGB565: &[u8] = include_bytes!("../../res/car-gol.bin");
+static LOGO_RGB565_FULLW: &[u8] = include_bytes!("../../res/car-gol-fullw.bin");
 
 pub struct LcdDisplay {
   display: LcdDriver,
@@ -224,8 +225,45 @@ impl LcdDisplay {
   pub fn show_splash(&mut self) {
     self.clear();
     self.draw_text("CAR_GOL", 85, 30, Rgb565::WHITE);
-    self.draw_text("Project", 85, 60, Rgb565::WHITE);
-    self.draw_logo(70, 100);
+    self.draw_logo(70, 60);
+  }
+
+  pub fn show_splash_with(&mut self, text: &str, x: i32, y: i32, color: Rgb565) {
+    self.show_splash();
+    // Split text based on newlines and draw each line separately with a vertical offset
+    // Since it is no_std, we cannot use split() directly, so we will iterate over the characters and handle newlines manually
+    let mut line_start = 0;
+    let mut line_number = 0;
+    for (i, c) in text.chars().enumerate() {
+      if c == '\n' || i == text.len() - 1 {
+        let line_end = if c == '\n' { i } else { i + 1 };
+        let line = &text[line_start..line_end];
+        self.draw_text(line, x, y + (line_number * (TILE_HEIGHT + 2) as i32), color);
+        line_start = i + 1;
+        line_number += 1;
+      }
+    }
+  }
+
+  pub fn show_logo_fullwidth(&mut self) {
+    let expected_size = 240 * 240 * 2;
+
+    assert_eq!(
+      LOGO_RGB565_FULLW.len(),
+      expected_size,
+      "Invalid logo RGB565 size"
+    );
+
+    let mut pixels = LOGO_RGB565_FULLW
+      .as_chunks::<2>()
+      .0
+      .iter()
+      .map(|b| u16::from_be_bytes([b[0], b[1]]));
+
+    self
+      .display
+      .set_pixels((0, 0), (239, 239), &mut pixels)
+      .expect("Failed to draw logo");
   }
 
   /// Clear the display to black.
@@ -281,6 +319,7 @@ impl LcdDisplay {
   pub unsafe fn show_game_of_life<const GRID_WIDTH: usize, const GRID_HEIGHT: usize>(
     &mut self,
     cells: *const u32,
+    draw_grid: bool,
   ) {
     assert!(GRID_WIDTH > 0);
     assert!(GRID_HEIGHT > 0);
@@ -339,38 +378,39 @@ impl LcdDisplay {
       }
     }
 
-    // ---------------------------------------------------------------------
-    // Draw the grid.
-    //
-    // Vertical lines
-    // ---------------------------------------------------------------------
+    if draw_grid {
+      // ---------------------------------------------------------------------
+      // Draw the grid.
+      //
+      // Vertical lines
+      // ---------------------------------------------------------------------
+      for x in 0..=GRID_WIDTH {
+        let px = offset_x + x * cell_size;
 
-    for x in 0..=GRID_WIDTH {
-      let px = offset_x + x * cell_size;
+        self.fill_rect(
+          px as u16,
+          offset_y as u16,
+          1,
+          grid_height as u16 + 1,
+          Rgb565::WHITE,
+        );
+      }
 
-      self.fill_rect(
-        px as u16,
-        offset_y as u16,
-        1,
-        grid_height as u16 + 1,
-        Rgb565::WHITE,
-      );
-    }
+      // ---------------------------------------------------------------------
+      // Horizontal lines
+      // ---------------------------------------------------------------------
 
-    // ---------------------------------------------------------------------
-    // Horizontal lines
-    // ---------------------------------------------------------------------
+      for y in 0..=GRID_HEIGHT {
+        let py = offset_y + y * cell_size;
 
-    for y in 0..=GRID_HEIGHT {
-      let py = offset_y + y * cell_size;
-
-      self.fill_rect(
-        offset_x as u16,
-        py as u16,
-        grid_width as u16 + 1,
-        1,
-        Rgb565::WHITE,
-      );
+        self.fill_rect(
+          offset_x as u16,
+          py as u16,
+          grid_width as u16 + 1,
+          1,
+          Rgb565::WHITE,
+        );
+      }
     }
   }
 }

@@ -271,7 +271,7 @@ impl BoardIo {
     }
   }
 
-  pub fn take_step_once(&mut self) -> bool {
+  pub fn push_button_clicked(&mut self) -> bool {
     #[cfg(feature = "board-devkit-rust-2")]
     {
       false

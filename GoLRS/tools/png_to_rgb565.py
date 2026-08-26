@@ -4,8 +4,8 @@ import sys
 
 INPUT = sys.argv[1] if len(sys.argv) > 1 else "logo.png"
 OUTPUT = sys.argv[2] if len(sys.argv) > 2 else "logo_rgb565.bin"
-
-SIZE = (100, 100)
+SZ = int(sys.argv[3]) if len(sys.argv) > 3 else 100
+SIZE = (SZ, SZ)
 
 img = Image.open(INPUT).convert("RGBA")
 
